@@ -50,14 +50,47 @@ def enable_plugin_paths(candidate_paths):
 
 
 class DirMetaDataProvider(object):
-    """Base class for all metadata plugin classes"""
+    """Base class for all metadata plugin classes.
+    All derived classes must supply a unique category name
+    For each"""
     
     category_name = None
     
-    def readers(self):
-        raise NotImplementedError()
+    
+    def __init__(self, previously_stored_data=None):
+        pass
+    
 
-    def data(self):
-        raise NotImplementedError()
+    def data_generator(self, first_block_of_data, first_block_is_entire_file=False):
+        """Must return a 2-tuple containing the list of readers.
+        
+        @param first_block_of_data: to determine whether or not you have readers for this type of data.
+            The size of the block will be at least 64K, assuming of course the file is that long.
+            There is be no set upper limit.
+        
+        @param first_block_is_entire_file: when True, ``first_block_of_data`` is guaranteed to  contain
+            all data in the file, and the entire processing may be done in this method. In that case,
+            ``[]`` should be returned.
+            Please note that this is an optimization, and there may be circumstances in 
+            which this parameter is not set to True when the entire contents of the file actually
+            *is* in ``first_block_of_data``.
+            
+        @return: a list of readers
+            A reader is a callable which can be called multiple times with as its sole parameter a block
+            of binary data from the file. All blocks will have a size >= 1, except the last one, which
+            will have a size of 0. Please make sure you do *not* store any references to the data blocks
+            as they will generally be as large as practical, and having more than one of these block may
+            cause the program to run out of memory.
+         
+        """
+        return []
 
     
+    def data(self):
+        """
+        Will only be called after the data_generator() is called, and all readers returned will
+        have been fed all the file data.
+        """
+        raise NotImplementedError()
+
+
