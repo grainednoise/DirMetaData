@@ -47,9 +47,9 @@ class ReaderAdaptorTest(unittest.TestCase):
         self.assertEqual([], consumer.data)
         
         for d in testdata:
-            reader(d)
+            self.assertTrue(reader(d))
         
-        reader('')
+        self.assertFalse(reader(''))
         
         self.assertEqual(['start'] + testdata + ['end'], consumer.data)
 
@@ -65,11 +65,11 @@ class ReaderAdaptorTest(unittest.TestCase):
         
         
         for d in testdata:
-            reader1(d)
-            reader2(d)
+            self.assertTrue(reader1(d))
+            self.assertTrue(reader2(d))
         
-        reader1('')
-        reader2('')
+        self.assertFalse(reader1(''))
+        self.assertFalse(reader2(''))
         
         expected = ['start'] + testdata + ['end']
         
