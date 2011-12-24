@@ -51,18 +51,23 @@ def enable_plugin_paths(candidate_paths):
 
 class DirMetaDataProvider(object):
     """Base class for all metadata plugin classes.
-    All derived classes must supply a unique category name
-    For each"""
+    All derived classes must supply a unique category name.
+    """
     
     category_name = None
     
     
     def __init__(self, previously_stored_data=None):
-        pass
+        """
+        @param previously_stored_data: a data structure containing serializable data
+            as returned from the call to self.data() a previous occasion. Should be used
+            when not all data can be parsed from the file (i.e. is input by the user) or
+            when historical data should be kept (versioning). 
+        """
     
 
     def data_generator(self, first_block_of_data, first_block_is_entire_file=False):
-        """Must return a 2-tuple containing the list of readers.
+        """Must return a list of readers (which may be empty).
         
         @param first_block_of_data: to determine whether or not you have readers for this type of data.
             The size of the block will be at least 64K, assuming of course the file is that long.
@@ -79,7 +84,7 @@ class DirMetaDataProvider(object):
             A reader is a callable which can be called multiple times with as its sole parameter a block
             of binary data from the file. All blocks will have a size >= 1, except the last one, which
             will have a size of 0. Please make sure you do *not* store any references to the data blocks
-            as they will generally be as large as practical, and having more than one of these block may
+            as they will generally be as large as practical, and having more than one of these blocks may
             cause the program to run out of memory.
          
         """
