@@ -17,12 +17,20 @@ def _may_contain_valid_plugin_path(path):
 
 
 
+try:
+    _valid_provider_id_types = (str, unicode) #@UndefinedVariable
+
+except:
+    _valid_provider_id_types = (str, bytes) #@UndefinedVariable
+    
+
+
 def register_provider(clss):
     """This function should be called during import of a plugin to register
      a subclass of DirMetaDataProvider. It may be called only once for any
      particular class, and the clss.category_name must be globally unique. 
     """
-    assert isinstance(clss.category_name, (str, unicode))
+    assert isinstance(clss.category_name, _valid_provider_id_types)
     assert clss.category_name not in dirmetadata_providers
     dirmetadata_providers[clss.category_name] = clss
     
@@ -44,7 +52,7 @@ def enable_plugin_paths(candidate_paths):
     for plugin_name in plugin_names:
         __import__(plugin_name)
 
-    print plugin_names
+    print(plugin_names)
     
 
 
@@ -97,5 +105,6 @@ class DirMetaDataProvider(object):
         have been fed all the file data.
         """
         raise NotImplementedError()
+
 
 
