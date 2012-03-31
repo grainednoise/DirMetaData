@@ -1,4 +1,4 @@
-from greenlet import greenlet
+from greenlet import greenlet #@UnresolvedImport not sure why this is neccessary
 
 
 """
@@ -85,6 +85,7 @@ def _greenlet_byte_generator():
         block = None
 
 
+
 def reader_from_byte_generator_accepting_function(func):
     """Adapts a function which accepts a generator which yields single bytes
     to a reader. A reader is a function which can be called multiple times with
@@ -95,6 +96,7 @@ def reader_from_byte_generator_accepting_function(func):
     return _general_push_pull_adaptor(func, _greenlet_byte_generator)
 
 
+
 def block_to_byte_generator_wrapper(block_generator):
     try:
         for block in block_generator:
@@ -103,9 +105,6 @@ def block_to_byte_generator_wrapper(block_generator):
 
     except GeneratorExit:
         block_generator.close()
-
-
-
 
 
 
