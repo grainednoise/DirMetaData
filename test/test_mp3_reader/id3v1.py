@@ -27,9 +27,7 @@ class TestCase(unittest.TestCase):
         for r in readers:
             r('')
         
-        tags = prov.data()
-        print tags
-        return tags
+        return prov.data()
 
 
     def assert_tags(self, filename, **expected):
@@ -153,7 +151,6 @@ class TestCase(unittest.TestCase):
             tags = self.process_file("id3v1_%03d_genre_F.mp3" % i)['id3v1']
             self.assertTrue('genre' in tags, "No 'genre' at %d" % i)
             self.assertTrue('title' in tags, "No 'TITLE' at %d" % i)
-            print tags
             self.assertEqual(tags['title'], tags['genre'], "Failure at %d" % i)
 
 
