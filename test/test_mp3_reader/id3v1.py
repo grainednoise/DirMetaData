@@ -139,13 +139,13 @@ class TestCase(unittest.TestCase):
             tags = self.process_file("id3v1_%03d_genre.mp3" % i)['id3v1']
             self.assertTrue('genre' in tags, "No 'genre' at %d" % i)
             self.assertTrue('title' in tags, "No 'TITLE' at %d" % i)
-            self.assertEqual(tags['title'], tags['genre'])
+            self.assertEqual(tags['title'], tags['genre'], "Failure at %d" % i)
             
         for i in range(95, 163):
             tags = self.process_file("id3v1_%03d_genre_W.mp3" % i)['id3v1']
             self.assertTrue('genre' in tags, "No 'genre' at %d" % i)
             self.assertTrue('title' in tags, "No 'TITLE' at %d" % i)
-            self.assertEqual(tags['title'], tags['genre'])
+            self.assertEqual(tags['title'], tags['genre'], "Failure at %d" % i)
             
         for i in range(163, 271):
             tags = self.process_file("id3v1_%03d_genre_F.mp3" % i)['id3v1']
