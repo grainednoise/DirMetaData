@@ -229,3 +229,61 @@ def reader_from_file_like_object_accepting_function(func):
     """
 
     return _general_push_pull_adaptor(func, _FileLikeBLockReader)
+
+
+
+def reader_from_trailing_block_accepting_function(func, block_size):
+    """Adapts a function which accepts a single block of a predetermined size
+    of data to a reader. This block will always be the trailing data in the
+    stream. If there is more than block_size bytes of data in the stream, the
+    block will have all the data in the stream.
+    
+    The function 'func' will be called as soon as the reader is closed - i.e.
+    by calling it with an empty block or None - and is guaranteed to be called
+    exactly once.
+    
+    
+    A reader is a function which can be called multiple times with
+    a nonempty block of data, and once with None, or an empty block of data.
+    """
+    
+    stored_blocks = []
+    
+    def reader(block):
+        if stored_blocks and stored_blocks[0] is True:
+            raise Exception("The reader is closed")
+        
+        if not block:
+            result = ''.join(stored_blocks)
+            
+            if len(result) > block_size:
+                result = result[-block_size:]
+            
+            stored_blocks[:] = [True]
+            func(result)
+            return
+        
+        len_block = len(block)
+
+        if len(block) > block_size:
+            stored_blocks[:] = [block[-block_size:]]
+        
+        
+        elif len_block == block_size:
+            stored_blocks[:] = [block]
+        
+        else:
+            max_remaining = block_size - len_block
+            cntr = len(stored_blocks)
+            
+            while cntr >= 2:
+                cntr -= 1
+                max_remaining -= len(stored_blocks[cntr])
+                if max_remaining <= 0:
+                    stored_blocks[:cntr - 1] = []
+                
+            
+            stored_blocks.append(block)
+            
+    
+    return reader

@@ -1,12 +1,13 @@
 from dirmetadata.blockreaderutils import (
-    reader_from_generator_accepting_function, reader_from_file_like_object_accepting_function)
+    reader_from_generator_accepting_function, reader_from_file_like_object_accepting_function,
+    reader_from_trailing_block_accepting_function)
 import unittest
 
 
 
 class TestGeneratorConsumer(object):
     def __init__(self):
-        self.data =[]
+        self.data = []
     
     def consumer(self, generator):
         self.data.append('start')
@@ -248,6 +249,100 @@ class FileLikeAdaptorTest(unittest.TestCase):
         self.read_per_chunk(testdata, 200, sizes)
 
   
+
+
+class FinalBlockReaderTest(unittest.TestCase):
+    expected_block = "0123456789"
+    testdata = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" * 10 + expected_block
+
+
+    def build_reader(self):
+        called = []
+        
+        def func(block):
+            if called:
+                self.fail("Block accepting function called more than once")
+        
+            called.append(True)
+            
+            self.assertEqual(self.expected_block, block)
+        
+        def is_called():
+            return bool(called)
+        
+        return reader_from_trailing_block_accepting_function(func, len(self.expected_block)), is_called
+
+
+        
+    def sliced(self, slice_size):
+        blocks = [self.testdata[n:n + slice_size] for n in range(0, len(self.testdata), slice_size)]
+        self.assertEqual(self.testdata, ''.join(blocks))
+        
+        reader, is_called = self.build_reader()
+        
+        for block in blocks:
+            reader(block)
+            self.assertFalse(is_called())
+        
+        reader('')        
+        self.assertTrue(is_called())
+
+    
+    def test_single_block(self):
+        reader, is_called = self.build_reader()
+        
+        reader(self.testdata)
+        self.assertFalse(is_called())
+
+        reader('')        
+        self.assertTrue(is_called())
+
+
+    def test_multiple_close(self):
+        reader, is_called = self.build_reader()
+        
+        reader(self.testdata)
+        self.assertFalse(is_called())
+
+        reader('')        
+        self.assertTrue(is_called())
+
+        self.assertRaises(Exception, lambda: reader(''))        
+    
+    
+    def test_size_20(self):
+        self.sliced(20)
+
+    def test_size_11(self):
+        self.sliced(1)
+
+    def test_size_10(self):
+        self.sliced(10)
+
+    def test_size_9(self):
+        self.sliced(9)
+
+    def test_size_6(self):
+        self.sliced(6)
+        
+    def test_size_5(self):
+        self.sliced(5)
+
+    def test_size_4(self):
+        self.sliced(4)
+
+    def test_size_3(self):
+        self.sliced(3)
+    
+    def test_size_2(self):
+        self.sliced(2)
+    
+    def test_size_1(self):
+        self.sliced(1)
+        
+        
+
+
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.test_']
