@@ -79,7 +79,7 @@ class DirMetaDataProvider(object):
 
         @param first_block_of_data: to determine whether or not you have readers for this type of data.
             The size of the block will be at least 64K, assuming of course the file is that long.
-            There is be no set upper limit.
+            There is no set upper limit.
 
         @param first_block_is_entire_file: when True, ``first_block_of_data`` is guaranteed to  contain
             all data in the file, and the entire processing may be done in this method. In that case,
