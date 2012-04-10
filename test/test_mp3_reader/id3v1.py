@@ -76,32 +76,32 @@ class TestCase(unittest.TestCase):
     
     def test006(self):
         self.assert_tags("id3v1_006_basic.mp3", 
-                        title=  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaA",
-                        artist= "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbB",
-                        album=  "cccccccccccccccccccccccccccccC",
-                        year=   2003,
-                        genre=  "Blues",
+                        title="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaA",
+                        artist="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbB",
+                        album="cccccccccccccccccccccccccccccC",
+                        year=2003,
+                        genre="Blues",
                         comment="dddddddddddddddddddddddddddD",
-                        track=  1)
+                        track=1)
 
 
     def test007(self):
         self.assert_tags("id3v1_007_basic_W.mp3",
-                        title=  "12345",
-                        artist= "12345",
-                        album=  "12345",
-                        year=   2003,
-                        genre=  "Blues",
+                        title="12345",
+                        artist="12345",
+                        album="12345",
+                        year=2003,
+                        genre="Blues",
                         comment="12345")
     
     
     def test008(self):
         self.assert_tags("id3v1_008_basic_W.mp3",
-                        title=  "12345",
-                        artist= "12345",
-                        album=  "12345",
-                        year=   2003,
-                        genre=  "Blues",
+                        title="12345",
+                        artist="12345",
+                        album="12345",
+                        year=2003,
+                        genre="Blues",
                         comment="12345",
                         track=1)
     
@@ -178,7 +178,7 @@ class TestCase(unittest.TestCase):
                         comment='foo bar baz',
                         year=None, # Year will be illegal
                         genre='Hip-Hop')
-    
+
 
 if __name__ == '__main__':
     unittest.main()
