@@ -39,12 +39,11 @@ class TagFrame(Frame):
         return "<TagFrame>"
 
 class Id3Frame(Frame):
-    def __init__(self, data, version_major, version_minor, flags, lengthbytes, size):
+    def __init__(self, data, version_major, version_minor, flags, size):
         Frame.__init__(self, data, 'ID3')
         self.version_major = version_major
         self.version_minor = version_minor
         self.flags = flags
-        self.lengthbytes = lengthbytes
         self.size = size
 
     @staticmethod
@@ -60,7 +59,7 @@ class Id3Frame(Frame):
 
         data = datasource.read(size)
 
-        return Id3Frame(''.join((version_major, version_minor, flags, lengthbytes, data)), ord(version_major), ord(version_minor), ord(flags), lengthbytes, size)
+        return Id3Frame(data, ord(version_major), ord(version_minor), ord(flags), size)
 
     def __repr__(self):
         return "<Id3Frame version=%d.%d flags=%d size=%d>" % (self.version_major, self.version_minor, self.flags, self.size)
@@ -115,13 +114,11 @@ class Mp3Frame(Frame):
     def create(datasource, frame_number, headerdata):
         h0, h1, h2 = unpack('BBB', headerdata)
         
-        print hex(h0), hex(h1), hex(h2)
-
         version = (h1 & 0x18) >> 3
         assert version != 1
         layer = 4 - ((h1 & 0x06) >> 1)
         
-        print layer
+#        print layer
         assert layer == 3, 'Bad layer ID'
 
         protected = not (h0 & 0x01)
@@ -164,6 +161,9 @@ class Mp3Frame(Frame):
         else:
             framesize = 72000 * bitrate / samplerate + pad_bit
         
+        print "Version", version
+        print "pad", pad_bit
+        print "Protected", protected
         print "Frame size ==", framesize
 
         data = headerdata + headerdata2 + datasource.read(framesize - 4)
@@ -180,7 +180,7 @@ def read_frames(datasource):
 
     while True:
         headerdata, classification, junkframe = classify_and_synchronise(datasource)
-        print "CLSS", classification
+#        print "CLSS", classification
 
         if junkframe:
             frame = JunkFrame(junkframe)
@@ -207,7 +207,7 @@ def read_frames(datasource):
 def classify_and_synchronise(datasource):
     headerdata = datasource.read(3)
 
-    if not len(headerdata) < 3:
+    if len(headerdata) < 3:
         return None, None, headerdata
     
 
@@ -233,7 +233,7 @@ def classify_and_synchronise(datasource):
         
     else:
         log.debug("Regained sync at %d", datasource.tell())
-        print headerdata
+#        print headerdata
 
     return headerdata, classification, ''.join(leftoverdata)
 
@@ -274,3 +274,11 @@ def classify_header(headerdata):
 #      print 'TAG', repr(data)
 
 
+if __name__ == '__main__':
+    import os.path
+    
+    name = r"E:\MP3\Incoming\Gentle Giant - Giant For A Day (35th Anniversary Edition) (1978)"
+    with file(os.path.join(name, "01 - Words From The Wise.mp3"), 'rb') as inp:
+        for f in read_frames(inp):
+            print f
+        
