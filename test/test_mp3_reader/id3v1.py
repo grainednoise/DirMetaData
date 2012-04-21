@@ -5,7 +5,7 @@ import unittest
 test_data_directory = r'D:\Hg\hsaudiotag\hsaudiotag\tests\testdata\id3v1'
 
 
-class TestCase(unittest.TestCase):
+class Id3V2Test(unittest.TestCase):
     
     def setUp(self):
         unittest.TestCase.setUp(self)
