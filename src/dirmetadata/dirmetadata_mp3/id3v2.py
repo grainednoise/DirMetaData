@@ -1,28 +1,39 @@
-import re
 from dirmetadata.dirmetadata_mp3.id3v1 import decode_genre
+import logging
+import re
+
+log = logging.getLogger("dirmetadata_mp3.id3v2")
 
 
 def ignore(data):
-#    print "IGNORED", data
     return None
+
+
+class StringDecodeError(Exception):
+    pass
+
 
 STRING_ENCODINGS = {0: 'iso-8859-1', 1: 'utf-16', 2: 'utf-16be', 3: 'utf-8'}
 BOM_LITTLE_ENDIAN = b'\xff\xfe'
 BOM_BIG_ENDIAN = b'\xfe\xff'
 BOMS = (BOM_LITTLE_ENDIAN, BOM_BIG_ENDIAN)
 
-def _decode_typed_string(strng, stringtype, nullreplace=u'\n'):
-    encoding = STRING_ENCODINGS[stringtype]
+def _decode_typed_string(strng, stringtype):
+    encoding = STRING_ENCODINGS.get(stringtype)
+    if encoding is None:
+        raise StringDecodeError()
+    
+    
     if stringtype == 1:
-        # This is a safekeeping code. Under normal circumstances, it shouldn't
-        # happen to have a \0 or a second BOM or no BOM in a type 1 string
-        bom = strng[:2]
-        if bom in BOMS:
-            therest = strng[2:].replace(BOM_BIG_ENDIAN, b'').replace(BOM_LITTLE_ENDIAN, b'')
-            strng = bom + therest
+        if strng[:2] in BOMS:
+            encoding = 'utf-16'
+        
         else:
-            strng = BOM_LITTLE_ENDIAN + strng
-            
+            encoding = 'utf-16lE'
+    
+    else:
+        encoding = STRING_ENCODINGS[stringtype]
+        
     try:
         result = unicode(strng, encoding)
         
@@ -32,21 +43,44 @@ def _decode_typed_string(strng, stringtype, nullreplace=u'\n'):
 
         except UnicodeDecodeError:
             return u''
-            
-    if nullreplace is None:
-        return result
     
-    return result.replace(u'\0', nullreplace)
+    return result.replace(u"\ufeff", u"").replace(u"\ufffe", u"")   # Get rid of any spurious BOMs
+    
 
 
-def _read_id3_string(data, nullreplace=u'\n'):
-    return _decode_typed_string(data[1:], ord(data[0]), nullreplace)
+def sanitize_unicode_string(strng, nullreplace=u' '):
+    if strng and strng[-1] == u'\0':
+        strng = strng[:-1]
 
+    return strng.replace(u'\0', nullreplace)
+
+
+def _read_id3_string(data):
+    return _decode_typed_string(data[1:], ord(data[0]))
+
+
+re_permissive_newline = re.compile(r'\n\r?|\r\n?')
+
+def _read_id3_string_replace_newlines(data):
+    raw =  _decode_typed_string(data[1:], ord(data[0]))
+    return re_permissive_newline.sub(u" ", sanitize_unicode_string(raw))
+    
 
 def named_text(name):
     def text(data):
 #        print name, repr(data)
-        return name, _read_id3_string(data)
+        return name, _read_id3_string_replace_newlines(data)
+    return text
+
+
+def named_text_with_newlines(name):
+    def text(data):
+        try:
+            return name, sanitize_unicode_string(_read_id3_string(data), u'\n')
+        
+        except StringDecodeError:
+            return name, None
+        
     return text
 
 
@@ -64,7 +98,7 @@ def _genre_sub(mobj):
 
 
 def genre(data):
-    raw = _read_id3_string(data).strip()
+    raw = _read_id3_string_replace_newlines(data).strip()
     
     mobj = re_genre2.match(raw)
     if mobj:
@@ -78,19 +112,20 @@ def genre(data):
 
 def named_text_list(name):
     def text(data):
-        return name, _read_id3_string(data).split(u'/')
+        return name, [v.strip() for v in _read_id3_string_replace_newlines(data).split(u'/')]
     return text
 
 
 def string_int(name): 
     def text(data):
         try:
-            return name, int(_read_id3_string(data))
+            return name, int(sanitize_unicode_string(_read_id3_string(data)).strip())
         
         except ValueError:
             return name, None
         
     return text
+
 
 def string_ms_as_s(name): 
     def text(data):
@@ -101,7 +136,6 @@ def string_ms_as_s(name):
             return name, None
         
     return text
-
 
 
 def trunc_at_0(lang):
@@ -116,10 +150,17 @@ def comment(data):
     stringtype  = ord(data[0])
     lang = unicode(trunc_at_0(data[1:4]), 'ISO-8859-1', 'replace')
     
-    full = _decode_typed_string(data[4:], stringtype)
-    lst = full.split(u'\n', 1)
+    try:
+        full = _decode_typed_string(data[4:], stringtype)
+        lst = full.split(u'\0', 1)
+        
+        if len(lst) < 2:
+            return 'comment', (u'', lang, sanitize_unicode_string(full, u'\n'))
     
-    return 'comment', (lst[0], lang, lst[1])
+    except StringDecodeError:
+        return None, None
+    
+    return 'comment', (sanitize_unicode_string(lst[0], u'\n'), lang, sanitize_unicode_string(lst[1], u'\n'))
 
 
 def _valid_int_or_none(value):
@@ -128,7 +169,6 @@ def _valid_int_or_none(value):
     
     except ValueError:
         return None
-
 
 
 def _decode_track(track):
@@ -141,7 +181,99 @@ def _decode_track(track):
         
     return (_valid_int_or_none(track), None)
 
+
+frames_3 = dict(
+        BUF=ignore,
+        CNT=ignore,
+        COM=comment,
+        CRA=ignore,
+        CRM=ignore,
+        ETC=ignore,
+        EQU=ignore,
+        GEO=ignore,
+        IPL=ignore,
+        LNK=ignore,
+        MCI=ignore,
+        MLL=ignore,
+        PIC=ignore,
+        POP=ignore,
+        REV=ignore,
+        RVA=ignore,
+        SLT=ignore,
+        STC=ignore,
+        TAL=named_text('album'),
+        TBP=ignore,
+        TCM=named_text_list('composers'),
+        TCO=genre,
+        TCR=ignore,
+        TDA=ignore,
+        TDY=ignore,
+        TEN=ignore,
+        TFT=ignore,
+        TIM=ignore,
+        TKE=ignore,
+        TLA=ignore,
+        TLE=string_ms_as_s('duration'),
+        TMT=ignore,
+        TOA=ignore,
+        TOF=ignore,
+        TOL=ignore,
+        TOR=ignore,
+        TOT=ignore,
+        TP1=named_text_list('artists'),
+        TP2=ignore,
+        TP3=ignore,
+        TP4=ignore,
+        TPA=ignore,
+        TPB=ignore,
+        TRC=ignore,
+        TRD=ignore,
+        TRK=named_text('track_raw'),
+        TSI=ignore,
+        TSS=ignore,
+        TT1=named_text('content_group'),
+        TT2=named_text('title'),
+        TT3=named_text('subtitle'),
+        TXT=ignore,
+        TXX=ignore,
+        TYE=string_int('year'),
+        UFI=ignore,
+        ULT=ignore,
+        WAF=ignore,
+        WAR=ignore,
+        WAS=ignore,
+        WCM=ignore,
+        WCP=ignore,
+        WPB=ignore,
+        WXX=ignore,
+    )
+
+
+def read_tag3(data, offset):
+    size_start = offset + 3
+    frame_start = offset + 6
+    
+    identifier = data[offset:size_start]
+    
+    if len(data) < (frame_start + 1) or identifier == b'\0\0\0':
+        return (None, None)
+    
+    size = (ord(data[size_start]) << 16) + (ord(data[size_start + 1]) << 8) + ord(data[size_start + 2])
+    next_offset = frame_start + size
+    
+    return (frames_3.get(identifier, ignore)(data[frame_start: next_offset]), next_offset)
+
+
+def _read_all_tag3(data):
+    offset = 0
+    while (offset + 7) < len(data):
+        result, offset = read_tag3(data, offset)
+        if offset is None:
+            break
         
+        if result:
+            yield result
+
 
 
 frames_4 = dict (
@@ -222,30 +354,44 @@ frames_4 = dict (
     )
 
 
-
-
 def read_tag4(data, offset):
-    identifier = data[offset:offset + 4]
-    size_blk =  data[offset + 4:offset + 8]
-    flags1 = ord(data[offset + 8])
-    flags2 = ord(data[offset + 9])
+    size_offset = offset + 4
+    frame_offset = offset + 10
     
-    size = (ord(size_blk[0]) << 24) + (ord(size_blk[1]) << 16) + (ord(size_blk[2]) << 8) + ord(size_blk[3])
-    print repr(identifier), size
-    print repr(data[offset + 10: offset + 10 + size])
+    identifier = data[offset:size_offset]
     
-    if identifier == b'\0\0\0\0':
+    if len(data) < (frame_offset + 1) or identifier == b'\0\0\0\0':
         return (None, None)
-    
-    return (frames_4.get(identifier, ignore)(data[offset + 10: offset + 10 + size]), offset + 10 + size)
 
+#    flags1 = ord(data[offset + 8])
+#    flags2 = ord(data[offset + 9])
+    
+    size = (ord(data[size_offset]) << 24) + \
+        (ord(data[size_offset + 1]) << 16) + \
+        (ord(data[size_offset + 2]) << 8) + \
+        ord(data[size_offset + 3])
+        
+    next_offset = frame_offset + size
+    
+    return (frames_4.get(identifier, ignore)(data[frame_offset: next_offset]), next_offset)
+
+
+def _read_all_tag4(data):
+    offset = 0
+    while (offset + 11) < len(data):
+        result, offset = read_tag4(data, offset)
+        if offset is None:
+            break
+        
+        if result:
+            yield result
 
 
 def _add_to_result(result, key, value):
     previous = result.get(key)
     
     if previous is not None and previous != value:
-        print "Duplicate item '{0}: previous={1}, this={2}".format(key, previous, value)
+        log.warn("Duplicate item '%s: previous=%s, this=%s", key, previous, value)
         return
     
     result[key] = value
@@ -258,7 +404,7 @@ def _process_comment(result, data):
         comment = result.setdefault('comment', {})
         
         if lang in comment:
-            print "Duplicate lang:",lang
+            log.warn("Duplicate lang=%s",lang)
             comment[lang] += (u'\n' + value)
         else:
             comment[lang] = value
@@ -268,7 +414,7 @@ def _process_comment(result, data):
         per_id = comment.setdefault(commentid, {})
     
         if lang in per_id:
-            print "Duplicate id, lang:", commentid, lang
+            log.warn("Duplicate id=%s, lang=%s", commentid, lang)
             per_id[lang] += (u'\n' + value)
         
         else:
@@ -278,7 +424,6 @@ def _process_comment(result, data):
 
 def _process_track(result, track):
     track, max_track = _decode_track(track)
-    print "TRACK", track, max_track
 
     if track is not None:
         _add_to_result(result, 'track', track)
@@ -288,37 +433,35 @@ def _process_track(result, track):
         
 
 
+
 def process_id3v2_frame(frame):
-    print frame
     unsync = bool(frame.flags & 0x80)
-    extended = bool(frame.flags & 0x40)
-    experimental = bool(frame.flags & 0x20)
-    print "Unsync", unsync, extended, experimental
+#    extended = bool(frame.flags & 0x40)
+#    experimental = bool(frame.flags & 0x20)
+#    print "Unsync", unsync, extended, experimental
     
-    results_list = []
+    if unsync:
+        raise NotImplementedError("unsyng")
     
-    offset = 0
-    while (offset + 11) < len(frame.data):
-        result, offset = read_tag4(frame.data, offset)
-        if offset is None:
-            break
-        
-        if result:
-            results_list.append(result)
-#            print result
+    if frame.version_major >= 3:
+        reader = _read_all_tag4
+
+    elif frame.version_major >= 2:
+        reader = _read_all_tag3
+
+    else:
+        raise Exception("Undecodable version: {0}.{1}".format(frame.version_major, frame.version_minor))
     
     result = {}
-    
-    for name, data in results_list:
+
+    for name, data in reader(frame.data):
         if name == 'comment':
             _process_comment(result, data)
         
         elif name == 'track_raw':
             _process_track(result, data)
         
-        else:
+        elif name is not None:
             _add_to_result(result, name, data)
-
     
-    print result
     return result

@@ -1,9 +1,10 @@
+from dirmetadata.dirmetadata_mp3 import id3v2
+from dirmetadata.dirmetadata_mp3.id3v2 import (_decode_track, 
+    named_text_with_newlines)
 from dirmetadata.dirmetadata_mp3.main import Mp3DirmetadataProvider
+import contextlib
 import os
 import unittest
-from dirmetadata.dirmetadata_mp3 import id3v2
-from dirmetadata.dirmetadata_mp3.id3v2 import named_text, _decode_track
-import contextlib
 
 
 
@@ -18,7 +19,7 @@ def allow_text_tag(**override):
     oldvals = {}
     for key, value in override.iteritems():
         oldvals[key] = id3v2.frames_4.get(key, IGNORE)
-        id3v2.frames_4[key] = named_text(value)
+        id3v2.frames_4[key] = named_text_with_newlines(value)
     
     try:
         yield
@@ -55,8 +56,6 @@ class Id3V2Test(unittest.TestCase):
     def expect_equal_dicts(self, expected, result):
         for key, expected_value in expected.items():
             if expected_value is not IGNORE:
-                print repr(expected_value)
-                print repr(result[key])
                 self.assertEqual(expected_value, result[key], "Fail at {0}: expected {1!r}, got {2!r}".format(key, expected_value, result[key]))
         
         self.assertSetEqual(set(expected.keys()), set(result.keys()))
@@ -207,10 +206,12 @@ Enjoy your copy of MusicMatch Jukebox!"""
                         experimental=u''
                     )
             
+            
     def test_unicode_comment(self):
         self.assert_tags('230-unicode_comment.tag',
                          comment_ids={u'example text frame': {u'': u'This text and the description should be in Unicode.'}}
                     )
+
 
     def test_tlen(self):
         self.assert_tags('../mpeg/test8.mp3',
@@ -234,6 +235,60 @@ Enjoy your copy of MusicMatch Jukebox!"""
         self.assertEqual((None, 12), _decode_track(u'foo/12'))
         self.assertEqual((None, 24), _decode_track(u'/24'))
         self.assertEqual((8, None), _decode_track(u'8/'))
+
+
+    def test_newlines(self):
+        #like numeric_genre, but the number is not between ()
+        self.assert_tags('newlines.tag',
+                        title=u'foo bar baz',
+                        artists=[u'foo bar baz'],
+                        album=u'foo bar baz',
+                        genre=u'foo bar baz',
+                        comment={u'en': u'foo\nbar\rbaz'},
+                        year=None,
+                    )
+
+
+    def test_version_22(self):
+        self.assert_tags('v22.tag',
+                         title=u'Chanson de Nuit - Op. 15 No. 1',
+                         artists=[u'Kennedy', u'Pettinger'],
+                         album=u'Salut d\'Amour (Elgar)',
+                         track=5,
+                         max_track=10,
+                         year=1984,
+                         genre=u'Classical',
+                         composers=[u'Edward Elgar'],
+                         comment_ids=IGNORE,
+                        )
+
+
+    def test_v24_no_syncsafe(self):
+        #syncsafe is only for v2.4 and up.
+        self.assert_tags('v24_no_syncsafe.tag',
+                         title=u'Boccherini / Minuet (String Quartet in E major)',
+                         album=u'Smooth Classics - disk 1',
+                         track=8,
+                         genre=u'Classical',
+                         artists=[u'Classic FM'],
+                         duration=203.293,
+                         comment_ids=IGNORE,
+                    )
+
+
+    def test_invalid_text_type(self):
+        # invalid_text_type has a 0xff stringtype
+        # Don't crash on invalid string types, just ignore the text
+        with allow_text_tag(TXXX='experimental'):
+            self.assert_tags('invalid_text_type.tag',
+                        experimental=None,
+                    )
+
+
+    def test_invalid_comment_type(self):
+        # invalid_comment_type has a 0xff stringtype
+        # Don't crash on invalid string types, just ignore the text
+        self.assert_tags('invalid_comment_type.tag') # don't crash
 
 
 if __name__ == "__main__":
