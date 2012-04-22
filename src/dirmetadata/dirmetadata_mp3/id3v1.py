@@ -182,6 +182,14 @@ def get_string(block, result, name):
     result[name] = unicode(raw_string, 'ISO-8859-1', 'replace')
 
 
+
+def decode_genre(genre_code):
+    if genre_code < len(GENRE_NAMES):
+        return GENRE_NAMES[genre_code]
+
+    return u"Unknown/{0}".format(genre_code)
+
+
 def id3v1tagreader(block):
     if len(block) != 128 or block[:3] != "TAG":
         return None
@@ -206,14 +214,7 @@ def id3v1tagreader(block):
         result['year'] = year
         
     
-    genre_code = ord(block[127])
-    
-    if genre_code < len(GENRE_NAMES):
-        result['genre'] = GENRE_NAMES[genre_code]
-        
-    else:
-        result['genre'] = u"Unknown/{0}".format(genre_code)
-        
+    result['genre'] = decode_genre(ord(block[127]))
     
     track_num = ord(block[126])
     before_track_num = ord(block[125])

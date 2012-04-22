@@ -1,7 +1,9 @@
+import re
+from dirmetadata.dirmetadata_mp3.id3v1 import decode_genre
 
 
 def ignore(data):
-    print "IGNORED", data
+#    print "IGNORED", data
     return None
 
 STRING_ENCODINGS = {0: 'iso-8859-1', 1: 'utf-16', 2: 'utf-16be', 3: 'utf-8'}
@@ -9,7 +11,7 @@ BOM_LITTLE_ENDIAN = b'\xff\xfe'
 BOM_BIG_ENDIAN = b'\xfe\xff'
 BOMS = (BOM_LITTLE_ENDIAN, BOM_BIG_ENDIAN)
 
-def _read_id3_string(strng, stringtype, nullreplace=None):
+def _decode_typed_string(strng, stringtype, nullreplace=u'\n'):
     encoding = STRING_ENCODINGS[stringtype]
     if stringtype == 1:
         # This is a safekeeping code. Under normal circumstances, it shouldn't
@@ -37,28 +39,63 @@ def _read_id3_string(strng, stringtype, nullreplace=None):
     return result.replace(u'\0', nullreplace)
 
 
+def _read_id3_string(data, nullreplace=u'\n'):
+    return _decode_typed_string(data[1:], ord(data[0]), nullreplace)
+
 
 def named_text(name):
     def text(data):
-        print name, repr(data)
-        return name, _read_id3_string(data[1:], ord(data[0]))
+#        print name, repr(data)
+        return name, _read_id3_string(data)
     return text
 
 
+
+re_genre = re.compile(r'\((\(|(?P<ref>\d+)\))')
+re_genre2 = re.compile(r'^\d+$')
+
+
+def _genre_sub(mobj):
+    ref = mobj.group('ref')
+    if ref is None:
+        return "("
+    num = int(ref)
+    return decode_genre(num)
+
+
 def genre(data):
-    return "genre", _read_id3_string(data[1:], ord(data[0]))
+    raw = _read_id3_string(data).strip()
+    
+    mobj = re_genre2.match(raw)
+    if mobj:
+        value = decode_genre(int(mobj.group(0)))
+    
+    else:
+        value = re_genre.sub(_genre_sub, raw)
+    
+    return "genre", value
 
 
 def named_text_list(name):
     def text(data):
-        return name, _read_id3_string(data[1:], ord(data[0])).split(u'/')
+        return name, _read_id3_string(data).split(u'/')
     return text
 
 
 def string_int(name): 
     def text(data):
         try:
-            return name, int(_read_id3_string(data[1:], ord(data[0])))
+            return name, int(_read_id3_string(data))
+        
+        except ValueError:
+            return name, None
+        
+    return text
+
+def string_ms_as_s(name): 
+    def text(data):
+        try:
+            return name, float(_read_id3_string(data)) / 1000.0
         
         except ValueError:
             return name, None
@@ -66,16 +103,45 @@ def string_int(name):
     return text
 
 
+
+def trunc_at_0(lang):
+    null_byte = lang.find(b'\0')
+    if null_byte == -1:
+        return lang
+    
+    return lang[:null_byte]
+
+
 def comment(data):
     stringtype  = ord(data[0])
-    lang = unicode(data[1:4], 'ISO-8859-1', 'replace')
-    full = _read_id3_string(data[4:], stringtype)
-    lst = full.split(u'\0', 1)
-    assert len(lst) == 2
+    lang = unicode(trunc_at_0(data[1:4]), 'ISO-8859-1', 'replace')
     
+    full = _decode_typed_string(data[4:], stringtype)
+    lst = full.split(u'\n', 1)
     
     return 'comment', (lst[0], lang, lst[1])
 
+
+def _valid_int_or_none(value):
+    try:
+        return int(value)
+    
+    except ValueError:
+        return None
+
+
+
+def _decode_track(track):
+    #The track field can either contain a track number or a string in the
+    #format <trackno>/<trackcount> (Example: 3/14)
+    
+    if '/' in track: 
+        num, maxnum = track.split('/', 1)
+        return _valid_int_or_none(num), _valid_int_or_none(maxnum)
+        
+    return (_valid_int_or_none(track), None)
+
+        
 
 
 frames_4 = dict (
@@ -118,7 +184,7 @@ frames_4 = dict (
         TIT3=named_text('subtitle'),
         TKEY=ignore,
         TLAN=ignore,
-        TLEN=ignore,
+        TLEN=string_ms_as_s('duration'),
         TMED=ignore,
         TOAL=ignore,
         TOFN=ignore,
@@ -132,7 +198,7 @@ frames_4 = dict (
         TPE4=ignore,
         TPOS=ignore,
         TPUB=ignore,
-        TRCK=ignore,
+        TRCK=named_text('track_raw'),
         TRDA=ignore,
         TRSN=ignore,
         TRSO=ignore,
@@ -175,6 +241,53 @@ def read_tag4(data, offset):
 
 
 
+def _add_to_result(result, key, value):
+    previous = result.get(key)
+    
+    if previous is not None and previous != value:
+        print "Duplicate item '{0}: previous={1}, this={2}".format(key, previous, value)
+        return
+    
+    result[key] = value
+    
+
+def _process_comment(result, data):
+    commentid, lang, value = data
+    
+    if not commentid:
+        comment = result.setdefault('comment', {})
+        
+        if lang in comment:
+            print "Duplicate lang:",lang
+            comment[lang] += (u'\n' + value)
+        else:
+            comment[lang] = value
+    
+    else:
+        comment = result.setdefault('comment_ids', {})
+        per_id = comment.setdefault(commentid, {})
+    
+        if lang in per_id:
+            print "Duplicate id, lang:", commentid, lang
+            per_id[lang] += (u'\n' + value)
+        
+        else:
+            per_id[lang] = value
+
+
+
+def _process_track(result, track):
+    track, max_track = _decode_track(track)
+    print "TRACK", track, max_track
+
+    if track is not None:
+        _add_to_result(result, 'track', track)
+
+    if max_track is not None:
+        _add_to_result(result, 'max_track', max_track)
+        
+
+
 def process_id3v2_frame(frame):
     print frame
     unsync = bool(frame.flags & 0x80)
@@ -192,30 +305,20 @@ def process_id3v2_frame(frame):
         
         if result:
             results_list.append(result)
-            print result
-    
-    
+#            print result
     
     result = {}
     
     for name, data in results_list:
         if name == 'comment':
-            comment = result.setdefault('comment', {})
-            commentid, lang, value = data
-            per_id = comment.setdefault(commentid, {})
-            if lang in per_id:
-                print "Duplicate id, lang:", commentid, lang
-            else:
-                per_id[lang] = value
-            
+            _process_comment(result, data)
+        
+        elif name == 'track_raw':
+            _process_track(result, data)
         
         else:
-            if name in result:
-                print "Duplicate name:", name
-            
-            else:
-                result[name] = data
-    
+            _add_to_result(result, name, data)
+
     
     print result
     return result

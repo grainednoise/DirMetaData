@@ -19,14 +19,13 @@ class Mp3DirmetadataProvider(DirMetaDataProvider):
         DirMetaDataProvider.__init__(self, previously_stored_data)
         self.id3v1data = None
         self.id3v2data = None
-        
     
     
     def data_generator(self, first_block_of_data, first_block_is_entire_file=False):
         if len(first_block_of_data) < 128:
             return []
         
-        if classify_header(first_block_of_data[:3]) is None:
+        if not self._contains_mp3_header(first_block_of_data):
             return []
         
         
@@ -47,6 +46,23 @@ class Mp3DirmetadataProvider(DirMetaDataProvider):
         return result
     
     
+    def _contains_mp3_header(self, first_block_of_data):
+        if classify_header(first_block_of_data[:3]) is not None:
+            return True
+        
+        offset = 0
+        
+        while True:
+            offset = first_block_of_data.find(b'\xff', offset + 1, 4096)
+            if offset == -1:
+                break
+            
+            if classify_header(first_block_of_data[offset:offset + 3]) is not None:
+                return True
+        
+        return False
+    
+    
     def _mp3_data_processor(self, reader):
         for frame in read_frames(reader):
             if frame.classification == "ID3":
@@ -59,11 +75,6 @@ class Mp3DirmetadataProvider(DirMetaDataProvider):
 
     def _id3_frame_processor(self, frame):
         self.id3v2data = process_id3v2_frame(frame)
-        
-        
-        
-        
-        
             
         
 
