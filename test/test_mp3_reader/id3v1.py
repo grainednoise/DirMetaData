@@ -156,8 +156,8 @@ class Id3V2Test(unittest.TestCase):
 
     def testzero(self):
         #test that id3v1 handle invalid files gracefully
-        self.expect_no_id3v1('../zerofile')
-        self.expect_no_id3v1('../randomfile')
+        self.assertIsNone(self.process_file('../zerofile'))
+        self.assertIsNone(self.process_file('../randomfile'))
 
 
     def test_non_ascii(self):

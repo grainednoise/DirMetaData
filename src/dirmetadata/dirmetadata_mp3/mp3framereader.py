@@ -9,7 +9,7 @@ import logging
 import sys
 
 log = logging.getLogger('dirmetadata_mp3.mp3framereader')
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 __all__ = ('JunkFrame', 'TagFrame', 'Id3Frame', 'Mp3Frame', 'read_frames')
 
@@ -124,7 +124,7 @@ class Mp3Frame(Frame):
         protected = not (h0 & 0x01)
 
         bitrate_bit = (h2 & 0xf0) >> 4
-        print bitrate_bit
+#        print bitrate_bit
         assert bitrate_bit != 0 and bitrate_bit != 15, '!Bitrate'
 
         pad_bit = (h2 & 0x02) >> 1
@@ -161,10 +161,10 @@ class Mp3Frame(Frame):
         else:
             framesize = 72000 * bitrate / samplerate + pad_bit
         
-        print "Version", version
-        print "pad", pad_bit
-        print "Protected", protected
-        print "Frame size ==", framesize
+#        print "Version", version
+#        print "pad", pad_bit
+#        print "Protected", protected
+#        print "Frame size ==", framesize
 
         data = headerdata + headerdata2 + datasource.read(framesize - 4)
 
@@ -194,8 +194,13 @@ def read_frames(datasource):
             frame = Id3Frame.create(datasource)
 
         elif classification == 'MP3':
-            frame_number += 1
-            frame = Mp3Frame.create(datasource, frame_number, headerdata)
+            try:
+                frame = Mp3Frame.create(datasource, frame_number, headerdata)
+                frame_number += 1
+            
+            except AssertionError:
+                frame = JunkFrame(headerdata)
+                log.debug(frame)
 
         else:
             break
@@ -233,7 +238,7 @@ def classify_and_synchronise(datasource):
         
     else:
         log.debug("Regained sync at %d", datasource.tell())
-#        print headerdata
+
 
     return headerdata, classification, ''.join(leftoverdata)
 
@@ -250,35 +255,4 @@ def classify_header(headerdata):
 
     return None
 
-
-#def processId3Data(datasource, verbose):
-#    # ID3 - ignored
-#    version = datasource.read(2)
-#    flags = ord(datasource.read(1))
-#    lengthbytes = datasource.read(4)
-#    s = [ ord(c) & 127 for c in lengthbytes]
-#    size = (s[0]<<21) | (s[1]<<14) | (s[2]<<7) | s[3]
-#
-#    data = datasource.read(size)
-#
-#    if verbose:
-#      print 'ID3 (%0xd bytes)' % size, repr(data)
-#
-#    return
-#
-#def processTagData(datasource, verbose):
-#    # TAG - ignored
-#    data = datasource.read(128 - 3)
-#
-#    if verbose:
-#      print 'TAG', repr(data)
-
-
-if __name__ == '__main__':
-    import os.path
-    
-    name = r"E:\MP3\Incoming\Gentle Giant - Giant For A Day (35th Anniversary Edition) (1978)"
-    with file(os.path.join(name, "01 - Words From The Wise.mp3"), 'rb') as inp:
-        for f in read_frames(inp):
-            print f
         

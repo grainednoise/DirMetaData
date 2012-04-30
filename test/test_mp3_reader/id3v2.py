@@ -5,6 +5,7 @@ from dirmetadata.dirmetadata_mp3.main import Mp3DirmetadataProvider
 import contextlib
 import os
 import unittest
+from dirmetadata.dirmetadata_mp3.mp3framereader import classify_header
 
 
 
@@ -34,9 +35,12 @@ def allow_text_tag(**override):
         
     
 class Id3V2Test(unittest.TestCase):
-    def process_file(self, filename):
+    def process_file(self, filename, offset=0):
         with open(os.path.join(test_data_directory, filename), 'rb') as inp:
             file_data = inp.read()
+        
+        if offset:
+            file_data = file_data[offset:]
         
         prov = Mp3DirmetadataProvider()
         readers = prov.data_generator(file_data)
@@ -70,6 +74,15 @@ class Id3V2Test(unittest.TestCase):
         self.expect_equal_dicts(expected, id3v2)
 
 
+    def assert_tags_offset(self, filename, offset, **expected):
+        tags = self.process_file(filename, offset)
+        
+        self.assertTrue('id3v2' in tags, "No id3v2 tags")
+        id3v2 = tags['id3v2']
+        
+        self.expect_equal_dicts(expected, id3v2)
+
+
 
     def test_normal(self):
         self.assert_tags('normal.mp3',
@@ -84,7 +97,7 @@ class Id3V2Test(unittest.TestCase):
 
     def test_no_tag(self):
         tags = self.process_file('notag.mp3')
-        self.assertFalse('id3v2' in tags, "Shouldn't have an id3v2 tags")
+        self.assertTrue(tags is None or 'id3v2' not in tags, "Shouldn't have an id3v2 tags")
 
 
     def test_that_spot(self):
@@ -136,7 +149,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
 
 
     def test_with_footer(self):
-        self.assert_tags('with_footer.mp3',
+        self.assert_tags_offset('with_footer.mp3', 25902,
                          artists=[u'AFI'],
                          album=u'Shut Your Mouth And Open Your',
                          title=u'06 - Third Season',

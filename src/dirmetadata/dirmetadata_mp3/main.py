@@ -28,48 +28,37 @@ class Mp3DirmetadataProvider(DirMetaDataProvider):
         if len(first_block_of_data) < 128:
             return []
         
-        if not self._contains_mp3_header(first_block_of_data):
+        if classify_header(first_block_of_data[:3]) is None:
             return []
         
         
         return [reader_from_file_like_object_accepting_function(self._mp3_data_processor), 
                 reader_from_trailing_block_accepting_function(self._id3v1tagreader, 128)
             ]
-    
-    
-    def data(self):
+
+
+    def _build_result(self):
         result = {}
-        
         if self.sound is not None:
             result['sound'] = self.sound
-
+            
         if self.errors:
             result['errors'] = self.errors
         
         if self.id3v1data is not None:
             result['id3v1'] = self.id3v1data
-
+        
         if self.id3v2data is not None:
             result['id3v2'] = self.id3v2data
-            
+        
         return result
-    
-    
-    def _contains_mp3_header(self, first_block_of_data):
-        if classify_header(first_block_of_data[:3]) is not None:
-            return True
-        
-        offset = 0
-        
-        while True:
-            offset = first_block_of_data.find(b'\xff', offset + 1, 4096)
-            if offset == -1:
-                break
-            
-            if classify_header(first_block_of_data[offset:offset + 3]) is not None:
-                return True
-        
-        return False
+
+
+    def data(self):
+        if self.sound == None and self.errors == None and self.id3v1data == None and self.id3v2data == None:
+            return None
+
+        return self._build_result()
     
     
     def _mp3_data_processor(self, reader):
@@ -97,7 +86,8 @@ class Mp3DirmetadataProvider(DirMetaDataProvider):
         
         samplerate = None
         inconsistent_sample_rate = False
-        samples = total_frame_sizes = 0
+        samples = total_frame_sizes = total_frames = 0
+        declared_bitrates = {}
         
         
         for frame in skip_last_tag_reader(reader):
@@ -109,6 +99,12 @@ class Mp3DirmetadataProvider(DirMetaDataProvider):
                         samplerate = frame.samplerate
                     else:
                         inconsistent_sample_rate = True
+                
+                total_frames += 1
+                
+                if frame.bitrate not in declared_bitrates:
+                    declared_bitrates[frame.bitrate] = 0
+                declared_bitrates[frame.bitrate] += 1
                 
                 samples += frame.nsamples
                 total_frame_sizes += len(frame.data)
@@ -145,12 +141,14 @@ class Mp3DirmetadataProvider(DirMetaDataProvider):
                 total_frame_sizes=total_frame_sizes,
                 sample_rate=samplerate,
                 hash=mp3_sha.hexdigest(),
+                declared_bitrates=declared_bitrates,
+                total_frames=total_frames,
             )
         
         if samplerate is not None and not inconsistent_sample_rate:
             duration = samples / float(samplerate)
             self.sound['duration'] = duration
-            self.sound['bitrate'] = total_frame_sizes / duration
+            self.sound['bitrate'] = int(round(8 * total_frame_sizes / duration))
             
     
     def _id3v1tagreader(self, block):
