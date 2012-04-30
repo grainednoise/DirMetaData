@@ -155,7 +155,7 @@ class DirectoryMetaData(object):
         for provider_name in dirmetadata_providers:
             provider_class = dirmetadata_providers[provider_name]
 
-            provider_data = deepcopy(file_data[provider_name])
+            provider_data = deepcopy(file_data[provider_name]) if provider_name in file_data else {}
             providers[provider_name] = provider_class(provider_data)
 
 
