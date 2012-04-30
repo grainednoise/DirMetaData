@@ -1,11 +1,13 @@
+from copy import deepcopy
+from dirmetadata.main import (register_provider, DirMetaDataProvider, 
+    dirmetadata_providers)
 from os import listdir, stat
 from os.path import isfile, isdir, join
-
-
-from dirmetadata.main import register_provider, DirMetaDataProvider, dirmetadata_providers
-import hashlib
-from copy import deepcopy
+import bz2
 import copy
+import hashlib
+import json
+import threading
 
 
 
@@ -49,7 +51,6 @@ def read_directory(path):
 
 
 
-
 try:
     make_long_int = long  # @UndefinedVariable
 
@@ -66,24 +67,29 @@ class DirectoryMetaData(object):
         assert isdir(full_directory_path)
         self._full_directory_path = full_directory_path
         self._full_metadata_path_name = join(full_directory_path, '.dirmetadata')
+        self._access_lock = threading.Lock()
 
         if isfile(self._full_metadata_path_name):
-            self._read_metadata()
+            self._data = self._read_metadata()
+            self._dirty = False
 
         else:
             self._data = {}
+            self._dirty = True
 
 
         self._update_metadata()
 
 
     def names(self):
-        return self._data.keys()
+        with self._access_lock:
+            return self._data.keys()
     
 
     def __getitem__(self, name):
         """Returns a deep copy of all metadata for a file 'name' as dictionary."""
-        return copy.deepcopy(self._data[name])
+        with self._access_lock:
+            return copy.deepcopy(self._data[name])
 
 
     def get(self, name, default=None):
@@ -93,6 +99,39 @@ class DirectoryMetaData(object):
         except KeyError:
             return default
 
+
+    def write_if_updated(self):
+        with self._access_lock:
+            if self._dirty:
+                self._write_data()
+
+
+    def _write_data(self):
+        for data in self._data.values():
+            try:
+                del data['file']['updated']
+            except KeyError:
+                pass
+            
+            with open(self._full_metadata_path_name, "wb") as out:
+                out.write(bz2.compress(json.dumps(self._data, separators=(',', ':'))))
+        
+        for data in self._data.values():
+            data['file']['updated'] = False
+        
+        self._dirty = False
+
+
+
+
+    def _read_metadata(self):
+        with open(self._full_metadata_path_name, "rb") as inp:
+            data = json.loads(bz2.decompress(inp.read()))
+            
+        #TODO check data -- it should be assumed hostile
+        
+        return data
+            
 
     def _update_metadata(self):
         directory_data = self._data
@@ -116,7 +155,7 @@ class DirectoryMetaData(object):
             else:
                 file_data_file = file_data['file']
 
-                if size != file_data_file['size'] or mtime != file_data_file['mtime'] or ctime != file_data_file['ctime'] or file_data_file['deleted']:
+                if size != file_data_file['size'] or mtime != file_data_file['mtime'] or ctime != file_data_file['ctime'] or file_data_file.get('deleted'):
                     file_data_file['size'] = size
                     file_data_file['mtime'] = mtime
                     file_data_file['ctime'] = ctime
@@ -145,7 +184,6 @@ class DirectoryMetaData(object):
 
 
         for name in directory_data:
-            print name
             file_data = directory_data[name]
             file_data_file = file_data['file']
 
