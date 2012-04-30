@@ -441,7 +441,7 @@ def process_id3v2_frame(frame):
 #    print "Unsync", unsync, extended, experimental
     
     if unsync:
-        raise NotImplementedError("unsyng")
+        raise NotImplementedError("unsync")
     
     if frame.version_major >= 3:
         reader = _read_all_tag4
