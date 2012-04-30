@@ -77,6 +77,10 @@ class DirectoryMetaData(object):
         self._update_metadata()
 
 
+    def names(self):
+        return self._data.keys()
+    
+
     def __getitem__(self, name):
         """Returns a deep copy of all metadata for a file 'name' as dictionary."""
         return copy.deepcopy(self._data[name])
@@ -141,6 +145,7 @@ class DirectoryMetaData(object):
 
 
         for name in directory_data:
+            print name
             file_data = directory_data[name]
             file_data_file = file_data['file']
 
@@ -189,7 +194,9 @@ class DirectoryMetaData(object):
                 assert total == file_data['file']['size']
 
         for name in providers:
-            file_data[name] = providers[name].data()
+            new_data = providers[name].data()
+            if new_data is not None:
+                file_data[name] = new_data
 
 
 
@@ -210,4 +217,4 @@ class DirectoryMetaData(object):
 
 
     def _all_files(self):
-        return set((name for name in listdir(self._full_directory_path) if name.lower() != '.dirmetadata'))
+        return set((name for name in listdir(self._full_directory_path) if name.lower() != '.dirmetadata' and not isdir(join(self._full_directory_path, name))))
