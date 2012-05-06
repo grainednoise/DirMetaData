@@ -1,4 +1,5 @@
 from dirmetadata.dirmetadata_mp3.id3v1 import decode_genre
+import base64
 import logging
 import re
 
@@ -182,6 +183,50 @@ def _decode_track(track):
     return (_valid_int_or_none(track), None)
 
 
+def _split_null(data, offset, string_type):
+    if string_type in (0, 3):
+        split_point = data.find(b'\0', offset)
+        assert split_point != -1
+        string_data = data[offset:split_point]
+        rest = data[split_point + 1:]
+
+    else:
+        assert string_type in (1, 2)
+        
+        current = offset
+        while current < len(data) - 2:
+            if data[current:current + 2] == b'\0\0':
+                string_data = data[offset:current]
+                rest = data[current + 2:]
+            
+            current += 2
+        
+        else:
+            raise AssertionError()
+    
+    
+    strng = sanitize_unicode_string(_decode_typed_string(string_data, string_type))
+    
+    return strng, rest
+    
+    
+
+def decode_pic(data):
+    string_type = ord(data[0])
+    
+    null = data.find(b'\0', 1)
+    if null != -1:
+        mime_type = unicode(data[1:null], 'ISO-8859-1', 'replace')
+    else:
+        mime_type = u""
+    
+    picture_type = ord(data[null + 1])
+    
+    description, rest = _split_null(data, null + 2, string_type)
+    
+    return "picture", (mime_type, picture_type, description, rest)
+
+
 frames_3 = dict(
         BUF=ignore,
         CNT=ignore,
@@ -195,7 +240,7 @@ frames_3 = dict(
         LNK=ignore,
         MCI=ignore,
         MLL=ignore,
-        PIC=ignore,
+        PIC=decode_pic,
         POP=ignore,
         REV=ignore,
         RVA=ignore,
@@ -278,7 +323,7 @@ def _read_all_tag3(data):
 
 frames_4 = dict (
         AENC=ignore,
-        APIC=ignore,
+        APIC=decode_pic,
         COMM=comment,
         COMR=ignore,
         ENCR=ignore,
@@ -433,6 +478,69 @@ def _process_track(result, track):
         
 
 
+picture_types = { 
+        0: u"Other", 
+        1: u"32x32 pixels 'file icon' (PNG only)",
+        2: u"Other file icon",
+        3: u"Cover (front)",
+        4: u"Cover (back)",
+        5: u"Leaflet page",
+        6: u"Media (e.g. lable side of CD)",
+        7: u"Lead artist/lead performer/soloist",
+        8: u"Artist/performer",
+        9: u"Conductor",
+        0xA: u"Band/Orchestra",
+        0xB: u"Composer",
+        0xC: u"Lyricist/text writer",
+        0xD: u"Recording Location",
+        0xE: u"During recording",
+        0xF: u"During performance",
+        0x10: u"Movie/video screen capture",
+        0x11: u"A bright coloured fish",
+        0x12: u"Illustration",
+        0x13: u"Band/artist logotype",
+        0x14: u"Publisher/Studio logotype",
+    }
+
+
+def get_picture_type(number):
+    picture_type = picture_types.get(number)
+    if picture_type is not None:
+        return picture_type
+    
+    return "Picture Type {0}".format(number)
+     
+
+def get_or_create_sub_list(dictionary, key):
+    lst = dictionary.get(key)
+    if lst is None:
+        dictionary[key] = lst = []
+    
+    return lst
+
+
+def _process_picture(result, data):
+    mime_type, picture_type, description, image_data = data
+    
+    picture_info = dict(
+                    picture_type=get_picture_type(picture_type),
+                    image_data=base64.b64encode(image_data)           
+                )
+    
+    if mime_type:
+        if '/' not in mime_type:
+            mime_type = 'image/' + mime_type
+    
+        picture_info['mime_type'] = mime_type
+        
+    if description:
+        picture_info['description'] = description
+    
+    
+    get_or_create_sub_list(result, 'pictures').append(picture_info)
+        
+    
+
 
 def process_id3v2_frame(frame):
     unsync = bool(frame.flags & 0x80)
@@ -460,6 +568,9 @@ def process_id3v2_frame(frame):
         
         elif name == 'track_raw':
             _process_track(result, data)
+        
+        elif name == 'picture':
+            _process_picture(result, data)
         
         elif name is not None:
             _add_to_result(result, name, data)

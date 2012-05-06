@@ -1,11 +1,13 @@
+from PIL import Image
 from dirmetadata.dirmetadata_mp3 import id3v2
 from dirmetadata.dirmetadata_mp3.id3v2 import (_decode_track, 
     named_text_with_newlines)
 from dirmetadata.dirmetadata_mp3.main import Mp3DirmetadataProvider
+import StringIO
+import base64
 import contextlib
 import os
 import unittest
-from dirmetadata.dirmetadata_mp3.mp3framereader import classify_header
 
 
 
@@ -36,7 +38,13 @@ def allow_text_tag(**override):
     
 class Id3V2Test(unittest.TestCase):
     def process_file(self, filename, offset=0):
-        with open(os.path.join(test_data_directory, filename), 'rb') as inp:
+        if os.path.isfile(filename):
+            full_name = filename
+        
+        else:
+            full_name = os.path.join(test_data_directory, filename)
+        
+        with open(full_name, 'rb') as inp:
             file_data = inp.read()
         
         if offset:
@@ -54,12 +62,39 @@ class Id3V2Test(unittest.TestCase):
         tags = prov.data()
         return tags
     
+    
+    
+    def picture(self, size=None, mime_type=None, picture_type=None):
 
+        def get_image_from_data(data):
+            image_data = base64.b64decode(data)
+            buf = StringIO.StringIO(image_data)
+            image = Image.open(buf)
+            return image
+    
+    
+        def test(picture_data_list):
+            self.assertEqual(1, len(picture_data_list))
+            picture_data = picture_data_list[0]
+            
+            image = get_image_from_data(picture_data['image_data'])
+            self.assertIsNotNone(image)
+            
+            if mime_type is not None:
+                self.assertEqual(mime_type, picture_data['mime_type'])
+            
+            if size is not None:
+                self.assertEqual(size, image.size)
+        
+        return test
 
 
     def expect_equal_dicts(self, expected, result):
         for key, expected_value in expected.items():
-            if expected_value is not IGNORE:
+            if hasattr(expected_value, '__call__'):
+                expected_value(result[key])
+                 
+            elif expected_value is not IGNORE:
                 self.assertEqual(expected_value, result[key], "Fail at {0}: expected {1!r}, got {2!r}".format(key, expected_value, result[key]))
         
         self.assertSetEqual(set(expected.keys()), set(result.keys()))
@@ -124,6 +159,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                             comment_ids=IGNORE,
                             duration=15.0,
                             track=0,
+                            pictures=self.picture(size=(236, 238), picture_type=u'Other')
                         ),
                         inner)
 
@@ -138,6 +174,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                         comment_ids=IGNORE,
                         duration=257.358,
                         track=1,
+                        pictures=IGNORE, # APIC tag doesn't seem to contain valid image data
                     )
 
 
@@ -168,6 +205,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                           comment_ids=IGNORE,
                           duration=257.358,
                           track=1,
+                          pictures=IGNORE, # APIC tag doesn't seem to contain valid image data
                     )
 
 
@@ -236,6 +274,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                 year=1974,
                 genre=u'Blues',
                 track=8,
+                pictures=self.picture(size=(200, 198), picture_type=u'Other')
             )
 
 
@@ -302,6 +341,29 @@ Enjoy your copy of MusicMatch Jukebox!"""
         # invalid_comment_type has a 0xff stringtype
         # Don't crash on invalid string types, just ignore the text
         self.assert_tags('invalid_comment_type.tag') # don't crash
+    
+    
+    def test_picture_data(self):
+        def test(picture_data):
+            data = picture_data[u'Cover (front)']
+            self.assertEqual('image/jpg', data['mime_type'])
+            
+            image_data = base64.b64decode(data['image_data'])
+
+            image = Image.open(StringIO.StringIO(image_data))
+            self.assertEqual((1781, 1824), image.size)
+            
+        
+        self.assert_tags(r'D:\metadata-testdata\MP3\04 - Jerusalem.mp3',
+                        album=u'3rd Warning',
+                        pictures=self.picture(size=(1781, 1824)),
+                        comment={u'eng': u''},
+                        title=u'Jerusalem',
+                        track=4,
+                        artists=[u'Miriodor'],
+                        year=1991,
+                        genre=u'Avant-Prog',
+                    )
 
 
 if __name__ == "__main__":
