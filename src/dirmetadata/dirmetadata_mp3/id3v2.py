@@ -538,10 +538,16 @@ def process_id3v2_frame(frame):
     unsync = bool(frame.flags & 0x80)
 #    extended = bool(frame.flags & 0x40)
 #    experimental = bool(frame.flags & 0x20)
-#    print "Unsync", unsync, extended, experimental
     
     if unsync:
-        raise NotImplementedError("unsync")
+        frame_data = frame.data.replace('\xff\0', '\xff')
+        
+        if len(frame_data) == len(frame.data):
+            log.warn("Unsyncing data had no effect, the UNSYNC bit shouldn't have been set")
+    
+    else:
+        frame_data = frame.data
+        
     
     if frame.version_major >= 3:
         reader = _read_all_tag4
@@ -554,7 +560,7 @@ def process_id3v2_frame(frame):
     
     result = {}
 
-    for name, data in reader(frame.data):
+    for name, data in reader(frame_data):
         if name == 'comment':
             _process_comment(result, data)
         
