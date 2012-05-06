@@ -443,27 +443,19 @@ def _add_to_result(result, key, value):
     
 
 def _process_comment(result, data):
-    commentid, lang, value = data
+    comment_id, lang, value = data
     
-    if not commentid:
-        comment = result.setdefault('comment', {})
-        
-        if lang in comment:
-            log.warn("Duplicate lang=%s",lang)
-            comment[lang] += (u'\n' + value)
-        else:
-            comment[lang] = value
+    full_comment = dict(
+            value=value
+        )
     
-    else:
-        comment = result.setdefault('comment_ids', {})
-        per_id = comment.setdefault(commentid, {})
+    if comment_id:
+        full_comment['id'] = comment_id
     
-        if lang in per_id:
-            log.warn("Duplicate id=%s, lang=%s", commentid, lang)
-            per_id[lang] += (u'\n' + value)
-        
-        else:
-            per_id[lang] = value
+    if lang:
+        full_comment['language'] = lang
+    
+    get_or_create_sub_list(result, 'comments').append(full_comment)
 
 
 

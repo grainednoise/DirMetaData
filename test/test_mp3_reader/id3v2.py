@@ -126,7 +126,7 @@ class Id3V2Test(unittest.TestCase):
                         album=u'Proxima Estacion Esperanza (AD',
                         year=2001,
                         genre=u'Latin',
-                        comment={'eng': u'http://www.EliteMP3.ws'},
+                        comments=[dict(language='eng', value=u'http://www.EliteMP3.ws')],
                     )
 
 
@@ -147,7 +147,6 @@ Enjoy your copy of MusicMatch Jukebox!"""
         
         tags = self.process_file('thatspot.tag')
         inner = tags['id3v2']
-        inner['comment'] = inner['comment'][u'eng'].replace('\r','')
         self.maxDiff = None
         
         self.expect_equal_dicts(dict(
@@ -155,13 +154,16 @@ Enjoy your copy of MusicMatch Jukebox!"""
                             artists=[u'Carey Bell'],
                             album=u'Mellow Down Easy',
                             genre=u'Blues',
-                            comment=expected_comment,
-                            comment_ids=IGNORE,
+                            comments=IGNORE,
                             duration=15.0,
                             track=0,
                             pictures=self.picture(size=(236, 238), picture_type=u'Other')
                         ),
                         inner)
+        
+        for comment in inner['comments']:
+            if 'id' in comment and comment['language'] == u'eng':
+                    self.assertEqual(expected_comment, comment['value'].replace('\r',''))
 
 
     def test_ozzy(self):
@@ -171,7 +173,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                         album=u'Bark At The Moon',
                         year=1983,
                         genre=u'Metal',
-                        comment_ids=IGNORE,
+                        comments=IGNORE,
                         duration=257.358,
                         track=1,
                         pictures=IGNORE, # APIC tag doesn't seem to contain valid image data
@@ -191,7 +193,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                          album=u'Shut Your Mouth And Open Your',
                          title=u'06 - Third Season',
                          genre='Metal',
-                         comment_ids=IGNORE,
+                         comments=IGNORE,
                     )
 
 
@@ -202,7 +204,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                           artists=[u'Ozzy Osbourne'],
                           genre='Metal',
                           year=1983,
-                          comment_ids=IGNORE,
+                          comments=IGNORE,
                           duration=257.358,
                           track=1,
                           pictures=IGNORE, # APIC tag doesn't seem to contain valid image data
@@ -225,8 +227,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                         album=u'Greatest Hits, Disc 1',
                         artists=[u'Queen'],
                         title=u'Seven Seas of Rhye',
-                        comment=IGNORE,
-                        comment_ids=IGNORE,
+                        comments=IGNORE,
                         track=15,
                     )
     
@@ -238,8 +239,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                         album=u'Greatest Hits, Disc 1',
                         artists=[u'Queen'],
                         title=u'Seven Seas of Rhye',
-                        comment=IGNORE,
-                        comment_ids=IGNORE,
+                        comments=IGNORE,
                         track=15,
                     )
 
@@ -260,7 +260,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
             
     def test_unicode_comment(self):
         self.assert_tags('230-unicode_comment.tag',
-                         comment_ids={u'example text frame': {u'': u'This text and the description should be in Unicode.'}}
+                         comments=[dict(id=u'example text frame', value=u'This text and the description should be in Unicode.')]
                     )
 
 
@@ -296,7 +296,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                         artists=[u'foo bar baz'],
                         album=u'foo bar baz',
                         genre=u'foo bar baz',
-                        comment={u'en': u'foo\nbar\rbaz'},
+                        comments=[dict(language='en', value=u'foo\nbar\rbaz')],
                         year=None,
                     )
 
@@ -311,7 +311,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                          year=1984,
                          genre=u'Classical',
                          composers=[u'Edward Elgar'],
-                         comment_ids=IGNORE,
+                         comments=IGNORE,
                         )
 
 
@@ -324,7 +324,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
                          genre=u'Classical',
                          artists=[u'Classic FM'],
                          duration=203.293,
-                         comment_ids=IGNORE,
+                         comments=IGNORE,
                     )
 
 
@@ -357,7 +357,7 @@ Enjoy your copy of MusicMatch Jukebox!"""
         self.assert_tags(r'D:\metadata-testdata\MP3\04 - Jerusalem.mp3',
                         album=u'3rd Warning',
                         pictures=self.picture(size=(1781, 1824)),
-                        comment={u'eng': u''},
+                        comments=[dict(language=u'eng', value=u'')],
                         title=u'Jerusalem',
                         track=4,
                         artists=[u'Miriodor'],
