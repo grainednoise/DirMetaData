@@ -1,24 +1,30 @@
 from os.path import join, dirname
 import dirmetadata
-import unittest
+import pytest
 
 
-class PluginTest1(unittest.TestCase):
+@pytest.mark.skipif("'dummy' in dirmetadata.main.dirmetadata_providers")
+def test_discovery(monkeypatch):
 
+    additional_plugin_path = join(dirname(__file__), 'plugins')
 
-    def test_discovery(self):
-        if dirmetadata.main.dirmetadata_providers:
-            raise Exception("System is already initialised, can't run test")
-        
-        dirmetadata.main.enable_plugin_paths([join(dirname(__file__), 'plugins')])
-        
+    monkeypatch.syspath_prepend(additional_plugin_path)
+
+    assert "dummy" not in dirmetadata.main.dirmetadata_providers
+    try:
+        dirmetadata.main.enable_plugin_paths([additional_plugin_path])
+
         print dirmetadata.main.dirmetadata_providers
-        
-        self.assertTrue("dummy" in dirmetadata.main.dirmetadata_providers)
-        
-    
-        
+
+        assert "dummy" in dirmetadata.main.dirmetadata_providers
+
+
+    finally:
+        if "dummy" in dirmetadata.main.dirmetadata_providers:
+            del dirmetadata.main.dirmetadata_providers["dummy"]
+
+
+
 
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.test_discovery']
-    unittest.main()
+    pytest.main()

@@ -1,24 +1,16 @@
 import dirmetadata
-import unittest
-
-print dirmetadata
+import pytest
 
 
-class PluginTest2(unittest.TestCase):
+@pytest.mark.skipif("'mp3' in dirmetadata.main.dirmetadata_providers")
+def test_discovery():
+    import dirmetadata.dirmetadata_mp3 as dirmetadata_mp3 #@UnusedImport
 
-    def test_discovery2(self):
-        if dirmetadata.main.dirmetadata_providers:
-            raise Exception("System is already initialised, can't run test")
-        
-        import dirmetadata.dirmetadata_mp3 as dirmetadata_mp3 #@UnusedImport
-        
-        print dirmetadata.main.dirmetadata_providers
-        
-        self.assertTrue("mp3" in dirmetadata.main.dirmetadata_providers)
-        
-    
-        
+    print dirmetadata.main.dirmetadata_providers
+
+    assert "mp3" in dirmetadata.main.dirmetadata_providers
+
+
 
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.test_discovery']
-    unittest.main()
+    pytest.main()

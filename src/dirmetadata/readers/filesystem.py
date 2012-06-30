@@ -33,7 +33,6 @@ except ImportError:
 
 
 
-
 class FileSystemDirectoryReader(AbstractDirectoryReader):
     def __init__(self, name, parent=None, full_path=None):
         super(FileSystemDirectoryReader, self).__init__(name, parent)
