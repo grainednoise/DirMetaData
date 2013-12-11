@@ -1,43 +1,44 @@
-from os.path import dirname, join
-import dirmetadata.directory as directory
 import hashlib
-import os
-import unittest
+
+from pathlib import Path
+import pytest
+
+import dirmetadata.directory as directory
 
 
-class Test(unittest.TestCase):
-
-    def setUp(self):
-        self.path = join(dirname(__file__), 'testdata')
-        self.sha = {}
-
-        for name in os.listdir(self.path):
-            with open(join(self.path, name), 'rb') as inp:
-                self.sha[name] = hashlib.sha1(inp.read()).hexdigest()
+@pytest.fixture(scope='session')
+def testdata_path():
+    return Path(__file__).parent.parent / 'testdata' 
 
 
+@pytest.fixture(scope='module')
+def hashes(testdata_path):
+    values = {}
 
-    def test_hash_65536(self):
-        directory.DirectoryMetaData.FILE_BLOCK_SIZE_LIMIT = 65536
-        self._test_sha1()
-
-
-    def test_hash_100000000(self):
-        directory.DirectoryMetaData.FILE_BLOCK_SIZE_LIMIT = 100000000
-        self._test_sha1()
-
-
-    def test_hash_20(self):
-        directory.DirectoryMetaData.FILE_BLOCK_SIZE_LIMIT = 20
-        self._test_sha1()
+    for file_path in testdata_path.iterdir():
+        with file_path.open('rb') as inp:
+            values[file_path.name] = hashlib.sha1(inp.read()).hexdigest()
+    
+    return values
 
 
-    def _test_sha1(self):
-        dd = directory.read_directory(self.path)
-        self.assertEqual(len(self.sha), len(dd._data))
-        for name in self.sha:
-            self.assertEqual(self.sha[name], dd[name]['file']['sha1'])
+@pytest.fixture(params=[65536, 100000000, 20])
+def blocksize(request):
+    old_value = directory.DirectoryMetaData.FILE_BLOCK_SIZE_LIMIT
+    directory.DirectoryMetaData.FILE_BLOCK_SIZE_LIMIT = request.param
+    
+    def fin():
+        directory.DirectoryMetaData.FILE_BLOCK_SIZE_LIMIT = old_value
+    request.addfinalizer(fin)
 
-if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
-    unittest.main()
+    return request.param
+
+
+def test_hash(blocksize, testdata_path, hashes):
+    dd = directory.read_directory(testdata_path)
+    assert len(hashes) == len(dd._data)
+
+    for name in hashes:
+        assert hashes[name] == dd[name]['file']['sha1']
+    
+
