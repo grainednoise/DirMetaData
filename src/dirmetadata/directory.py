@@ -64,6 +64,7 @@ class DirectoryMetaData(object):
 
 
     def __init__(self, full_directory_path):
+        full_directory_path = str(full_directory_path)
         assert isdir(full_directory_path)
         self._full_directory_path = full_directory_path
         self._full_metadata_path_name = join(full_directory_path, '.dirmetadata')
